@@ -14,7 +14,7 @@ include_directories(src/include)
 add_library(sbpl SHARED
   src/discrete_space_information/environment_nav2D.cpp
   src/discrete_space_information/environment_navxythetalat.cpp
-  src/discrete_space_information/environment_navxythetamlevlat.cpp
+  # src/discrete_space_information/environment_navxythetamlevlat.cpp
   src/discrete_space_information/environment_nav2Duu.cpp
   src/discrete_space_information/environment_XXX.cpp
   src/discrete_space_information/environment_robarm.cpp
@@ -73,8 +73,8 @@ install(DIRECTORY src/include/sbpl DESTINATION include
 install(TARGETS sbpl
 	LIBRARY DESTINATION lib)
 
-add_executable(test_sbpl src/test/main.cpp)
-target_link_libraries(test_sbpl sbpl)
+# add_executable(test_sbpl src/test/main.cpp)
+# target_link_libraries(test_sbpl sbpl)
 
-add_executable(test_adjacency_list src/test/test_adjacency_list.cpp)
-target_link_libraries(test_adjacency_list sbpl)
+# add_executable(test_adjacency_list src/test/test_adjacency_list.cpp)
+# target_link_libraries(test_adjacency_list sbpl)
