@@ -33,14 +33,9 @@
 #include <cstdio>
 #include <vector>
 #include <sstream>
-#include <iostream>
-
-#include <fstream>
 
 #include <sbpl/discrete_space_information/environment.h>
 #include <sbpl/utils/utils.h>
-#include <sbpl/utils/sbpl_bfs_2d.h>
-
 
 // Define to test against in client code. Signals that Set2DBlockSize and
 // Set2DBucketSize are available in EnvironmentNAVXYTHETALATTICE
@@ -61,138 +56,9 @@
 #define NAVXYTHETALAT_DEFAULT_ACTIONWIDTH 5
 #define NAVXYTHETALAT_COSTMULT_MTOMM 1000
 
-// trailer
-#define ENVNAVXYTHETALATCART_DEFAULTOBSTHRESH 254
-#define NAVXYTHETALATCART_DEFAULT_ACTIONWIDTH 14 // 5
-#define NAVXYTHETALATCART_THETADIRS 16
-#define CART_THETADIRS 5 // changed 
-#define MAX_CART_ANGLE M_PI/4.0 // M_PI/4.0
-
 class CMDPSTATE;
 class MDPConfig;
 class SBPL2DGridSearch;
-
-// trailer specific struct and class
-class EnvNAVXYTHETALATCART3Dcell_t
-{
-public:
-    EnvNAVXYTHETALATCART3Dcell_t()
-    {
-        x = 0;
-        y = 0;
-        theta = 0;
-        cartangle = 0;
-    }
-
-    EnvNAVXYTHETALATCART3Dcell_t(int x_, int y_, int theta_, int cartangle_)
-    {
-        x = x_;
-        y = y_;
-        theta = theta_;
-        cartangle = cartangle_;
-    }
-
-    bool operator==(const EnvNAVXYTHETALATCART3Dcell_t cell) const
-    {
-        return x == cell.x && y == cell.y && theta == cell.theta && cartangle == cell.cartangle;
-    }
-
-    // bool operator<(const EnvNAVXYTHETALATCART3Dcell_t cell) const
-    // {
-    //     return x < cell.x || (x == cell.x && (y < cell.y || (y == cell.y && theta < cell.theta || (theta == cell.theta && cartangle < cell.cartangle))));
-    // }
-
-    int x;
-    int y;
-    int theta;
-    int cartangle;
-    int iteration; // ???
-};
-
-class EnvNAVXYTHETALATCART3Dpt_t // modified point data type for trailer
-{
-public:
-    EnvNAVXYTHETALATCART3Dpt_t()
-    {
-        x = 0;
-        y = 0;
-        theta = 0;
-        cartangle = 0;
-    }
-
-    EnvNAVXYTHETALATCART3Dpt_t(double x_, double y_, double theta_, double cartangle_)
-    {
-        x = x_;
-        y = y_;
-        theta = theta_;
-        cartangle = cartangle_;
-    }
-
-    bool operator==(const EnvNAVXYTHETALATCART3Dpt_t p) const
-    {
-        return x == p.x && y == p.y && theta == p.theta && cartangle == p.cartangle;
-    }
-
-    // care about the definition of smaller operator!!!
-    // bool operator<(const EnvNAVXYTHETALATCART3Dpt_t p) const
-    // {
-    //     return x < p.x || (x == p.x && (y < p.y || (y == p.y && theta < p.theta || (theta == p.theta && cartangle < p.cartangle))));
-    // }
-
-    double x;
-    double y;
-    double theta;
-    double cartangle;
-};
-
-
-// struct EnvNAVXYTHETALATCART3Dpt_t // modified point data type for trailer
-// {
-// 	double x;
-// 	double y;
-// 	double theta;
-//   double cartangle;
-// };
-
-struct EnvNAVXYTHETALATCARTAction_t
-{
-    unsigned char aind; //index of the action (unique for given starttheta)
-	char starttheta;
-	char dX;
-	char dY;
-	char endtheta;
-    char startcartangle;
-    char endcartangle;
-	unsigned int cost; 
-	std::vector<sbpl_2Dcell_t> intersectingcellsV;
-	//start at 0,0,starttheta and end at endcell in continuous domain with half-bin less to account for 0,0 start
-	std::vector<EnvNAVXYTHETALATCART3Dpt_t> intermptV;
-	//start at 0,0,starttheta and end at endcell in discrete domain
-	std::vector<EnvNAVXYTHETALATCART3Dcell_t> interm3DcellsV;
-};
-
-struct EnvNAVXYTHETALATCARTHashEntry_t
-{
-    int stateID;
-    int X;
-    int Y;
-    char Theta;
-    char CartAngle;
-    int iteration;
-};
-
-struct SBPL_xythetacart_mprimitive
-{
-    int motprimID;
-    unsigned char starttheta_c;
-    unsigned char startphi_c;
-    int additionalactioncostmult;
-    EnvNAVXYTHETALATCART3Dcell_t endcell;
-    double turning_radius;
-    //intermptV start at 0,0,starttheta and end at endcell in continuous
-    //domain with half-bin less to account for 0,0 start
-    std::vector<EnvNAVXYTHETALATCART3Dpt_t> intermptV;
-};
 
 struct EnvNAVXYTHETALATAction_t
 {
@@ -258,86 +124,7 @@ struct EnvNAVXYTHETALATConfig_t
     int EndY_c;
     int EndTheta;
     unsigned char** Grid2D;
-    // TODO: add NumPhiDirs
 
-    std::vector<double> ThetaDirs;
-    double StartTheta_rad;
-    double EndTheta_rad;
-    double min_turning_radius_m;
-
-    // the value at which and above which cells are obstacles in the maps sent from outside
-    // the default is defined above
-    unsigned char obsthresh;
-
-    // the value at which and above which until obsthresh (not including it)
-    // cells have the nearest obstacle at distance smaller than or equal to
-    // the inner circle of the robot. In other words, the robot is definitely
-    // colliding with the obstacle, independently of its orientation
-    // if no such cost is known, then it should be set to obsthresh (if center
-    // of the robot collides with obstacle, then the whole robot collides with
-    // it independently of its rotation)
-    unsigned char cost_inscribed_thresh;
-
-    // the value at which and above which until cost_inscribed_thresh (not including it) cells
-    // **may** have a nearest osbtacle within the distance that is in between
-    // the robot inner circle and the robot outer circle
-    // any cost below this value means that the robot will NOT collide with any
-    // obstacle, independently of its orientation
-    // if no such cost is known, then it should be set to 0 or -1 (then no cell
-    // cost will be lower than it, and therefore the robot's footprint will
-    // always be checked)
-    int cost_possibly_circumscribed_thresh; // it has to be integer, because -1 means that it is not provided.
-
-    double nominalvel_mpersecs;
-
-    //double nominalangvel_radpersecs;
-
-    double timetoturn45degsinplace_secs;
-
-    double cellsize_m;
-
-    int dXY[NAVXYTHETALAT_DXYWIDTH][2];
-
-    // array of actions, ActionsV[i][j] - jth action for sourcetheta = i
-    EnvNAVXYTHETALATAction_t** ActionsV;
-    //PredActionsV[i] - vector of pointers to the actions that result in a state with theta = i
-    std::vector<EnvNAVXYTHETALATAction_t*>* PredActionsV;
-
-    int actionwidth; //number of motion primitives
-    std::vector<SBPL_xytheta_mprimitive> mprimV;
-
-    std::vector<sbpl_2Dpt_t> FootprintPolygon;
-};
-
-// if its necessary?
-struct EnvironmentNAVXYTHETALATCART_t
-{
-    int startstateid;
-    int goalstateid;
-
-    bool bInitialized;
-
-    //any additional variables
-};
-
-struct EnvNAVXYTHETALATConfig_Cart_t
-{
-    int EnvWidth_c;
-    int EnvHeight_c;
-    int NumThetaDirs;
-    int StartX_c;
-    int StartY_c;
-    int StartTheta;
-    int EndX_c;
-    int EndY_c;
-    int EndTheta;
-    unsigned char** Grid2D;
-
-    int StartCartAngle;
-    int EndCartAngle;
-    int NumCartThetaDirs;
-
-    // TODO Yucheng: for trailer?
     std::vector<double> ThetaDirs;
     double StartTheta_rad;
     double EndTheta_rad;
@@ -377,19 +164,14 @@ struct EnvNAVXYTHETALATConfig_Cart_t
     int dXY[NAVXYTHETALAT_DXYWIDTH][2];
 
     //array of actions, ActionsV[i][j] - jth action for sourcetheta = i
-    // EnvNAVXYTHETALATCARTAction_t** ActionsV;
-    // Yucheng: one more dimension for sourcephi 
-    EnvNAVXYTHETALATCARTAction_t*** ActionsV;
+    EnvNAVXYTHETALATAction_t** ActionsV;
     //PredActionsV[i] - vector of pointers to the actions that result in a state with theta = i
-    std::vector<EnvNAVXYTHETALATCARTAction_t*>* PredActionsV;
+    std::vector<EnvNAVXYTHETALATAction_t*>* PredActionsV;
 
     int actionwidth; //number of motion primitives
-    std::vector<SBPL_xythetacart_mprimitive> mprimV;
+    std::vector<SBPL_xytheta_mprimitive> mprimV;
 
     std::vector<sbpl_2Dpt_t> FootprintPolygon;
-    std::vector<sbpl_2Dpt_t> CartPolygon;
-	sbpl_2Dpt_t CartOffset;
-    sbpl_2Dpt_t CartCenterOffset;
 };
 
 class EnvNAVXYTHETALAT_InitParms
@@ -429,10 +211,8 @@ public:
      *        its actual radius) Motion primitives file defines the motion primitives
      *        available to the robot
      */
-    // virtual bool InitializeEnv(const char* sEnvFile, const std::vector<sbpl_2Dpt_t>& perimeterptsV,
-    //                            const char* sMotPrimFile);
-    virtual bool InitializeEnv(const char* sEnvFile, const std::vector<sbpl_2Dpt_t>& perimeterptsV, const std::vector<sbpl_2Dpt_t>& cartperimeterptsV, sbpl_2Dpt_t &cart_offset, const char* sMotPrimFile);	
-
+    virtual bool InitializeEnv(const char* sEnvFile, const std::vector<sbpl_2Dpt_t>& perimeterptsV,
+                               const char* sMotPrimFile);
 
     //  ??  virtual bool InitializeEnv(const ENVNAVXYTHETAVELOLAT_InitParms & params);
 
@@ -549,27 +329,14 @@ public:
      *        nominalvel_mpersecs is assumed velocity of vehicle while moving forward in m/sec
      *        timetoturn45degsinplace_secs is rotational velocity in secs/45 degrees turn
      */
-    // virtual bool InitializeEnv(int width, int height,
-    //                            /** if mapdata is NULL the grid is initialized to all freespace */
-    //                            const unsigned char* mapdata,
-    //                            double startx, double starty, double starttheta,
-    //                            double goalx, double goaly, double goaltheta,
-    //                            double goaltol_x, double goaltol_y, double goaltol_theta,
-    //                            const std::vector<sbpl_2Dpt_t>& perimeterptsV, double cellsize_m,
-    //                            double nominalvel_mpersecs, double timetoturn45degsinplace_secs,
-    //                            unsigned char obsthresh, const char* sMotPrimFile);
-
     virtual bool InitializeEnv(int width, int height,
                                /** if mapdata is NULL the grid is initialized to all freespace */
                                const unsigned char* mapdata,
-                               double startx, double starty, double starttheta, double startcartangle,
-                               double goalx, double goaly, double goaltheta, double goalcartangle,
-                               double goaltol_x, double goaltol_y, double goaltol_theta, double goaltol_cartangle,
-                               const std::vector<sbpl_2Dpt_t>& perimeterptsV, 
-                               const sbpl_2Dpt_t & cart_offset, 
-                            //    const sbpl_2Dpt_t & cart_cp_offset, const double rod_length,
-                               const std::vector<sbpl_2Dpt_t> & cart_perimeterptsV,
-                               double cellsize_m, double nominalvel_mpersecs, double timetoturn45degsinplace_secs,
+                               double startx, double starty, double starttheta,
+                               double goalx, double goaly, double goaltheta,
+                               double goaltol_x, double goaltol_y, double goaltol_theta,
+                               const std::vector<sbpl_2Dpt_t>& perimeterptsV, double cellsize_m,
+                               double nominalvel_mpersecs, double timetoturn45degsinplace_secs,
                                unsigned char obsthresh, const char* sMotPrimFile);
 
     /**
@@ -578,21 +345,14 @@ public:
      *        parameters may be given in the params object (including the ability to
      *        specify the number of thetas)
      */
-    // virtual bool InitializeEnv(int width, int height, const std::vector<sbpl_2Dpt_t> & perimeterptsV, double cellsize_m,
-    //                            double nominalvel_mpersecs, double timetoturn45degsinplace_secs,
-    //                            unsigned char obsthresh, const char* sMotPrimFile, EnvNAVXYTHETALAT_InitParms params);
+    virtual bool InitializeEnv(int width, int height, const std::vector<sbpl_2Dpt_t> & perimeterptsV, double cellsize_m,
+                               double nominalvel_mpersecs, double timetoturn45degsinplace_secs,
+                               unsigned char obsthresh, const char* sMotPrimFile, EnvNAVXYTHETALAT_InitParms params);
 
     /**
      * \brief update the traversability of a cell<x,y>
      */
     virtual bool UpdateCost(int x, int y, unsigned char newcost);
-
-    /**
-     * \brief update the traversability of a cell<x,y> for cart configuration
-     */
-    virtual bool UpdateCostCart(int x, int y, unsigned char newcost);
-
-    virtual bool UpdateCostCart(unsigned char newcost);
 
     /**
      * \brief re-setting the whole 2D map
@@ -626,9 +386,7 @@ public:
      *        the map. Note this is pretty expensive operation since it computes the
      *        footprint of the robot based on its x,y,theta
      */
-    // virtual bool IsValidConfiguration(int X, int Y, int Theta);
-
-    virtual bool IsValidConfiguration(int X, int Y, int Theta, int CartAngle);
+    virtual bool IsValidConfiguration(int X, int Y, int Theta);
 
     /**
      * \brief returns environment parameters. Useful for creating a copy environment
@@ -636,7 +394,7 @@ public:
     virtual void GetEnvParms(int *size_x, int *size_y, double* startx, double* starty, double* starttheta,
                              double* goalx, double* goaly, double* goaltheta, double* cellsize_m,
                              double* nominalvel_mpersecs, double* timetoturn45degsinplace_secs,
-                             unsigned char* obsthresh, std::vector<SBPL_xythetacart_mprimitive>* motionprimitiveV);
+                             unsigned char* obsthresh, std::vector<SBPL_xytheta_mprimitive>* motionprimitiveV);
 
     /**
      * \brief returns environment parameters. Useful for creating a copy environment
@@ -644,13 +402,12 @@ public:
     virtual void GetEnvParms(int *size_x, int *size_y, int* num_thetas, double* startx, double* starty,
                              double* starttheta, double* goalx, double* goaly, double* goaltheta, double* cellsize_m,
                              double* nominalvel_mpersecs, double* timetoturn45degsinplace_secs,
-                             unsigned char* obsthresh, std::vector<SBPL_xythetacart_mprimitive>* motionprimitiveV);
+                             unsigned char* obsthresh, std::vector<SBPL_xytheta_mprimitive>* motionprimitiveV);
 
     /**
      * \brief get internal configuration data structure
      */
-    // virtual const EnvNAVXYTHETALATConfig_t* GetEnvNavConfig();
-    virtual const EnvNAVXYTHETALATConfig_Cart_t* GetEnvNavConfig();
+    virtual const EnvNAVXYTHETALATConfig_t* GetEnvNavConfig();
 
     virtual ~EnvironmentNAVXYTHETALATTICE();
 
@@ -701,25 +458,16 @@ public:
     virtual void PrintVars() { }
 
 protected:
-    virtual int GetActionCost(int SourceX, int SourceY, int SourceTheta, int SourceCartAngle, EnvNAVXYTHETALATCARTAction_t* action);
-
-    // Debug: footprint output
-    // std::ofstream outFile;
+    virtual int GetActionCost(int SourceX, int SourceY, int SourceTheta, EnvNAVXYTHETALATAction_t* action);
 
     //member data
-    // EnvNAVXYTHETALATConfig_t EnvNAVXYTHETALATCfg;
-    // EnvironmentNAVXYTHETALAT_t EnvNAVXYTHETALAT;
+    EnvNAVXYTHETALATConfig_t EnvNAVXYTHETALATCfg;
+    EnvironmentNAVXYTHETALAT_t EnvNAVXYTHETALAT;
     std::vector<sbpl_xy_theta_cell_t> affectedsuccstatesV; //arrays of states whose outgoing actions cross cell 0,0
     std::vector<sbpl_xy_theta_cell_t> affectedpredstatesV; //arrays of states whose incoming actions cross cell 0,0
     int iteration;
     int blocksize; // 2D block size
     int bucketsize; // 2D bucket size
-
-    // member data for trailer 
-    EnvNAVXYTHETALATConfig_Cart_t EnvNAVXYTHETALATCartCfg;
-    EnvironmentNAVXYTHETALAT_t EnvNAVXYTHETALATCART;
-    std::vector<EnvNAVXYTHETALATCART3Dcell_t> affectedsuccstatesVc; //arrays of states whose outgoing actions cross cell 0,0
-	std::vector<EnvNAVXYTHETALATCART3Dcell_t> affectedpredstatesVc; //arrays of states whose incoming actions cross cell 0,0
 
     bool bUseNonUniformAngles;
 
@@ -731,97 +479,55 @@ protected:
 
     virtual void ReadConfiguration(FILE* fCfg);
 
+    virtual void InitializeEnvConfig(std::vector<SBPL_xytheta_mprimitive>* motionprimitiveV);
+
     virtual bool CheckQuant(FILE* fOut);
-
-    // virtual void SetConfiguration(int width, int height,
-    //                               /** if mapdata is NULL the grid is initialized to all freespace */
-    //                               const unsigned char* mapdata,
-    //                               int startx, int starty, int starttheta,
-    //                               int goalx, int goaly, int goaltheta,
-    //                               double cellsize_m, double nominalvel_mpersecs, double timetoturn45degsinplace_secs,
-    //                               const std::vector<sbpl_2Dpt_t> & robot_perimeterV);
-
-    // virtual bool InitGeneral(std::vector<SBPL_xytheta_mprimitive>* motionprimitiveV);
-    // virtual void PrecomputeActionswithBaseMotionPrimitive(std::vector<SBPL_xytheta_mprimitive>* motionprimitiveV);
-    // virtual void PrecomputeActionswithCompleteMotionPrimitive(std::vector<SBPL_xytheta_mprimitive>* motionprimitiveV);
-    // virtual void DeprecatedPrecomputeActions();
-
-    // virtual void InitializeEnvironment() = 0;
-
-    // virtual void ComputeHeuristicValues();
-
-    virtual bool IsValidCell(int X, int Y);
-
-    // virtual void CalculateFootprintForPose(sbpl_xy_theta_pt_t pose, std::vector<sbpl_2Dcell_t>* footprint);
-    // virtual void CalculateFootprintForPose(sbpl_xy_theta_pt_t pose, std::vector<sbpl_2Dcell_t>* footprint,
-    //                                        const std::vector<sbpl_2Dpt_t>& FootprintPolygon);
-    // virtual void RemoveSourceFootprint(sbpl_xy_theta_pt_t sourcepose, std::vector<sbpl_2Dcell_t>* footprint);
-    // virtual void RemoveSourceFootprint(sbpl_xy_theta_pt_t sourcepose, std::vector<sbpl_2Dcell_t>* footprint,
-    //                                    const std::vector<sbpl_2Dpt_t>& FootprintPolygon);
-
-    virtual void GetSuccs(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV,
-                          std::vector<EnvNAVXYTHETALATCARTAction_t*>* actionindV = NULL) = 0;
-    virtual void GetLazySuccs(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV, std::vector<bool>* isTrueCost, std::vector<EnvNAVXYTHETALATCARTAction_t*>* actionindV = NULL) = 0;
-    virtual void GetSuccsWithUniqueIds(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV, std::vector<EnvNAVXYTHETALATCARTAction_t*>* actionindV = NULL) = 0;
-    virtual void GetLazySuccsWithUniqueIds(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV, std::vector<bool>* isTrueCost, std::vector<EnvNAVXYTHETALATCARTAction_t*>* actionindV = NULL) = 0;
-    
-    // virtual int GetTrueCost(int parentID, int childID) = 0;
-    virtual bool isGoal(int id) = 0;
-
-    virtual double EuclideanDistance_m(int X1, int Y1, int X2, int Y2);
-
-    // virtual void ComputeReplanningData();
-    // virtual void ComputeReplanningDataforAction(EnvNAVXYTHETALATAction_t* action);
-
-    // virtual bool ReadMotionPrimitives(FILE* fMotPrims);
-    // virtual bool ReadinMotionPrimitive(SBPL_xytheta_mprimitive* pMotPrim, FILE* fIn);
-    // virtual bool ReadinCell(sbpl_xy_theta_cell_t* cell, FILE* fIn);
-    // virtual bool ReadinPose(sbpl_xy_theta_pt_t* pose, FILE* fIn);
-
-    virtual void PrintHeuristicValues();
-
-    // for trailer
-    virtual void InitializeEnvConfig(std::vector<SBPL_xythetacart_mprimitive>* motionprimitiveV);
-
-    void PrintFootprint();
-    EnvNAVXYTHETALATCART3Dpt_t getCartCenter(EnvNAVXYTHETALATCART3Dpt_t pose, sbpl_2Dpt_t cart_center_offset);
-
-    virtual void ComputeReplanningDataCart();
-    virtual void ComputeReplanningDataforAction(EnvNAVXYTHETALATCARTAction_t* action);
-
-    virtual void InitializeEnvironmentCart() = 0;
-
-    virtual void ComputeHeuristicValuesCart();
-
-    virtual bool ReadMotionPrimitivesCart(FILE* fMotPrims);
-    virtual bool ReadinMotionPrimitive(SBPL_xythetacart_mprimitive* pMotPrim, FILE* fIn);
-    virtual bool ReadinCell(EnvNAVXYTHETALATCART3Dcell_t* cell, FILE* fIn);
-    virtual bool ReadinPose(EnvNAVXYTHETALATCART3Dpt_t* pose, FILE* fIn);
-    virtual bool InitGeneralCart(std::vector<SBPL_xythetacart_mprimitive>* motionprimitiveV);
-    // virtual void CalculateFootprintForPose(EnvNAVXYTHETALATCART3Dpt_t pose, std::vector<sbpl_2Dcell_t>* footprint);
-    virtual void CalculateFootprintForPose(std::vector<sbpl_2Dpt_t> polygon, std::vector<sbpl_2Dpt_t> cart_polygon,
-                                     std::set<sbpl_2Dcell_t>* cells, EnvNAVXYTHETALATCART3Dpt_t pose, double res);
-    virtual void CalculateFootprintForPose(std::vector<sbpl_2Dpt_t> polygon, std::vector<sbpl_2Dpt_t> cart_polygon,
-                                     std::vector<sbpl_2Dcell_t>* cells, EnvNAVXYTHETALATCART3Dpt_t pose, double res);
-
-    virtual void Get2dMotionCells(std::vector<sbpl_2Dpt_t> polygon, std::vector<sbpl_2Dpt_t> polygon_cart, 
-                                  std::vector<EnvNAVXYTHETALATCART3Dpt_t> poses, std::vector<sbpl_2Dcell_t>* cells,
-                                  double res);
-
 
     virtual void SetConfiguration(int width, int height,
                                   /** if mapdata is NULL the grid is initialized to all freespace */
                                   const unsigned char* mapdata,
-                                  int startx, int starty, int starttheta, int startcartangle,
-                                  int goalx, int goaly, int goaltheta, int goalcartangle,
+                                  int startx, int starty, int starttheta,
+                                  int goalx, int goaly, int goaltheta,
                                   double cellsize_m, double nominalvel_mpersecs, double timetoturn45degsinplace_secs,
-                                  const std::vector<sbpl_2Dpt_t> & robot_perimeterV,
-                                  const std::vector<sbpl_2Dpt_t> & cart_perimeterV,
-                                  const sbpl_2Dpt_t &cart_offset);
+                                  const std::vector<sbpl_2Dpt_t> & robot_perimeterV);
 
-    virtual void PrecomputeActionswithCompleteMotionPrimitive(std::vector<SBPL_xythetacart_mprimitive>* motionprimitiveV);
-    void PrecomputeActions();
+    virtual bool InitGeneral(std::vector<SBPL_xytheta_mprimitive>* motionprimitiveV);
+    virtual void PrecomputeActionswithBaseMotionPrimitive(std::vector<SBPL_xytheta_mprimitive>* motionprimitiveV);
+    virtual void PrecomputeActionswithCompleteMotionPrimitive(std::vector<SBPL_xytheta_mprimitive>* motionprimitiveV);
+    virtual void DeprecatedPrecomputeActions();
 
+    virtual void InitializeEnvironment() = 0;
+
+    virtual void ComputeHeuristicValues();
+
+    virtual bool IsValidCell(int X, int Y);
+
+    virtual void CalculateFootprintForPose(sbpl_xy_theta_pt_t pose, std::vector<sbpl_2Dcell_t>* footprint);
+    virtual void CalculateFootprintForPose(sbpl_xy_theta_pt_t pose, std::vector<sbpl_2Dcell_t>* footprint,
+                                           const std::vector<sbpl_2Dpt_t>& FootprintPolygon);
+    virtual void RemoveSourceFootprint(sbpl_xy_theta_pt_t sourcepose, std::vector<sbpl_2Dcell_t>* footprint);
+    virtual void RemoveSourceFootprint(sbpl_xy_theta_pt_t sourcepose, std::vector<sbpl_2Dcell_t>* footprint,
+                                       const std::vector<sbpl_2Dpt_t>& FootprintPolygon);
+
+    virtual void GetSuccs(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV,
+                          std::vector<EnvNAVXYTHETALATAction_t*>* actionindV = NULL) = 0;
+    virtual void GetLazySuccs(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV, std::vector<bool>* isTrueCost, std::vector<EnvNAVXYTHETALATAction_t*>* actionindV = NULL) = 0;
+    virtual void GetSuccsWithUniqueIds(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV, std::vector<EnvNAVXYTHETALATAction_t*>* actionindV = NULL) = 0;
+    virtual void GetLazySuccsWithUniqueIds(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV, std::vector<bool>* isTrueCost, std::vector<EnvNAVXYTHETALATAction_t*>* actionindV = NULL) = 0;
+    virtual int GetTrueCost(int parentID, int childID) = 0;
+    virtual bool isGoal(int id) = 0;
+
+    virtual double EuclideanDistance_m(int X1, int Y1, int X2, int Y2);
+
+    virtual void ComputeReplanningData();
+    virtual void ComputeReplanningDataforAction(EnvNAVXYTHETALATAction_t* action);
+
+    virtual bool ReadMotionPrimitives(FILE* fMotPrims);
+    virtual bool ReadinMotionPrimitive(SBPL_xytheta_mprimitive* pMotPrim, FILE* fIn);
+    virtual bool ReadinCell(sbpl_xy_theta_cell_t* cell, FILE* fIn);
+    virtual bool ReadinPose(sbpl_xy_theta_pt_t* pose, FILE* fIn);
+
+    virtual void PrintHeuristicValues();
 };
 
 class EnvironmentNAVXYTHETALAT : public EnvironmentNAVXYTHETALATTICE
@@ -829,13 +535,9 @@ class EnvironmentNAVXYTHETALAT : public EnvironmentNAVXYTHETALATTICE
 public:
     EnvironmentNAVXYTHETALAT()
     {
-        // HashTableSize = 0;
-        // Coord2StateIDHashTable = NULL;
-        // Coord2StateIDHashTable_lookup = NULL;
-
-        HashTableSizeCart = 0;
-        Coord2StateIDHashTableCart = NULL;
-        Coord2StateIDHashTableCart_lookup = NULL;
+        HashTableSize = 0;
+        Coord2StateIDHashTable = NULL;
+        Coord2StateIDHashTable_lookup = NULL;
     }
 
     ~EnvironmentNAVXYTHETALAT();
@@ -843,16 +545,12 @@ public:
     /**
      * \brief sets start in meters/radians
      */
-    // virtual int SetStart(double x, double y, double theta);
-
-    virtual int SetStart(double x, double y, double theta, double cartangle);
+    virtual int SetStart(double x, double y, double theta);
 
     /**
      * \brief sets goal in meters/radians
      */
-    // virtual int SetGoal(double x, double y, double theta);
-
-    virtual int SetGoal(double x, double y, double theta, double cartangle);
+    virtual int SetGoal(double x, double y, double theta);
 
     /**
      * \brief sets goal tolerance. (Note goal tolerance is ignored currently)
@@ -862,14 +560,12 @@ public:
     /**
      * \brief returns state coordinates of state with ID=stateID
      */
-    // virtual void GetCoordFromState(int stateID, int& x, int& y, int& theta) const;
-    virtual void GetCoordFromState(int stateID, int& x, int& y, int& theta, int &cartangle) const;
+    virtual void GetCoordFromState(int stateID, int& x, int& y, int& theta) const;
 
     /**
      * \brief returns stateID for a state with coords x,y,theta
      */
-    // virtual int GetStateFromCoord(int x, int y, int theta);
-    virtual int GetStateFromCoord(int x, int y, int theta, int cartangle);
+    virtual int GetStateFromCoord(int x, int y, int theta);
 
     /**
      * \brief returns the actions / motion primitives of the passed path.
@@ -884,10 +580,8 @@ public:
      *         number of points in the input path. The returned coordinates are in
      *         meters,meters,radians
      */
-    // virtual void ConvertStateIDPathintoXYThetaPath(std::vector<int>* stateIDPath,
-    //                                                std::vector<sbpl_xy_theta_pt_t>* xythetaPath);
     virtual void ConvertStateIDPathintoXYThetaPath(std::vector<int>* stateIDPath,
-                                                   std::vector<EnvNAVXYTHETALATCART3Dpt_t>* xythetaPath);
+                                                   std::vector<sbpl_xy_theta_pt_t>* xythetaPath);
 
     /**
      * \brief prints state info (coordinates) into file
@@ -908,15 +602,13 @@ public:
      *        primitive
      *        if actionindV is NULL, then pointers to actions are not returned
      */
-    // virtual void GetSuccs(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV,
-    //                       std::vector<EnvNAVXYTHETALATAction_t*>* actionindV = NULL);
     virtual void GetSuccs(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV,
-                          std::vector<EnvNAVXYTHETALATCARTAction_t*>* actionindV = NULL);
+                          std::vector<EnvNAVXYTHETALATAction_t*>* actionindV = NULL);
 
-    virtual void GetLazySuccs(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV, std::vector<bool>* isTrueCost, std::vector<EnvNAVXYTHETALATCARTAction_t*>* actionindV = NULL);
-    virtual void GetSuccsWithUniqueIds(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV, std::vector<EnvNAVXYTHETALATCARTAction_t*>* actionindV = NULL);
-    virtual void GetLazySuccsWithUniqueIds(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV, std::vector<bool>* isTrueCost, std::vector<EnvNAVXYTHETALATCARTAction_t*>* actionindV = NULL);
-    // virtual int GetTrueCost(int parentID, int childID);
+    virtual void GetLazySuccs(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV, std::vector<bool>* isTrueCost, std::vector<EnvNAVXYTHETALATAction_t*>* actionindV = NULL);
+    virtual void GetSuccsWithUniqueIds(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV, std::vector<EnvNAVXYTHETALATAction_t*>* actionindV = NULL);
+    virtual void GetLazySuccsWithUniqueIds(int SourceStateID, std::vector<int>* SuccIDV, std::vector<int>* CostV, std::vector<bool>* isTrueCost, std::vector<EnvNAVXYTHETALATAction_t*>* actionindV = NULL);
+    virtual int GetTrueCost(int parentID, int childID);
     virtual bool isGoal(int id);
 
 
@@ -966,47 +658,29 @@ public:
      */
     virtual void PrintVars() { }
 
-    // const EnvNAVXYTHETALATHashEntry_t* GetStateEntry(int state_id) const;
-    const EnvNAVXYTHETALATCARTHashEntry_t* GetStateEntry(int state_id) const;
+    const EnvNAVXYTHETALATHashEntry_t* GetStateEntry(int state_id) const;
 
 protected:
     //hash table of size x_size*y_size. Maps from coords to stateId
-    // int HashTableSize;
-    // std::vector<EnvNAVXYTHETALATHashEntry_t*>* Coord2StateIDHashTable;
-    // //vector that maps from stateID to coords
-    // std::vector<EnvNAVXYTHETALATHashEntry_t*> StateID2CoordTable;
+    int HashTableSize;
+    std::vector<EnvNAVXYTHETALATHashEntry_t*>* Coord2StateIDHashTable;
+    //vector that maps from stateID to coords
+    std::vector<EnvNAVXYTHETALATHashEntry_t*> StateID2CoordTable;
 
-    // EnvNAVXYTHETALATHashEntry_t** Coord2StateIDHashTable_lookup;
+    EnvNAVXYTHETALATHashEntry_t** Coord2StateIDHashTable_lookup;
 
-    // virtual unsigned int GETHASHBIN(unsigned int X, unsigned int Y, unsigned int Theta);
+    virtual unsigned int GETHASHBIN(unsigned int X, unsigned int Y, unsigned int Theta);
 
-    // virtual EnvNAVXYTHETALATHashEntry_t* GetHashEntry_hash(int X, int Y, int Theta);
-    // virtual EnvNAVXYTHETALATHashEntry_t* CreateNewHashEntry_hash(int X, int Y, int Theta);
-    // virtual EnvNAVXYTHETALATHashEntry_t* GetHashEntry_lookup(int X, int Y, int Theta);
-    // virtual EnvNAVXYTHETALATHashEntry_t* CreateNewHashEntry_lookup(int X, int Y, int Theta);
+    virtual EnvNAVXYTHETALATHashEntry_t* GetHashEntry_hash(int X, int Y, int Theta);
+    virtual EnvNAVXYTHETALATHashEntry_t* CreateNewHashEntry_hash(int X, int Y, int Theta);
+    virtual EnvNAVXYTHETALATHashEntry_t* GetHashEntry_lookup(int X, int Y, int Theta);
+    virtual EnvNAVXYTHETALATHashEntry_t* CreateNewHashEntry_lookup(int X, int Y, int Theta);
 
-    // //pointers to functions
-    // EnvNAVXYTHETALATHashEntry_t* (EnvironmentNAVXYTHETALAT::*GetHashEntry)(int X, int Y, int Theta);
-    // EnvNAVXYTHETALATHashEntry_t* (EnvironmentNAVXYTHETALAT::*CreateNewHashEntry)(int X, int Y, int Theta);
+    //pointers to functions
+    EnvNAVXYTHETALATHashEntry_t* (EnvironmentNAVXYTHETALAT::*GetHashEntry)(int X, int Y, int Theta);
+    EnvNAVXYTHETALATHashEntry_t* (EnvironmentNAVXYTHETALAT::*CreateNewHashEntry)(int X, int Y, int Theta);
 
-    // virtual void InitializeEnvironment();
-
-    // trailer
-    int HashTableSizeCart;
-    std::vector<EnvNAVXYTHETALATCARTHashEntry_t*>* Coord2StateIDHashTableCart;
-    std::vector<EnvNAVXYTHETALATCARTHashEntry_t*> StateID2CoordTableCart;
-    EnvNAVXYTHETALATCARTHashEntry_t** Coord2StateIDHashTableCart_lookup;
-    virtual void InitializeEnvironmentCart();
-
-    virtual unsigned int GETHASHBIN(unsigned int X, unsigned int Y, unsigned int Theta, unsigned int CartAngle);
-
-    virtual EnvNAVXYTHETALATCARTHashEntry_t* GetHashEntryCart_hash(int X, int Y, int Theta, int CartAngle);
-    virtual EnvNAVXYTHETALATCARTHashEntry_t* CreateNewHashEntryCart_hash(int X, int Y, int Theta, int CartAngle);
-    virtual EnvNAVXYTHETALATCARTHashEntry_t* GetHashEntryCart_lookup(int X, int Y, int Theta, int CartAngle);
-    virtual EnvNAVXYTHETALATCARTHashEntry_t* CreateNewHashEntryCart_lookup(int X, int Y, int Theta, int CartAngle);
-
-    EnvNAVXYTHETALATCARTHashEntry_t* (EnvironmentNAVXYTHETALAT::*GetHashEntryCart)(int X, int Y, int Theta, int CartAngle);
-    EnvNAVXYTHETALATCARTHashEntry_t* (EnvironmentNAVXYTHETALAT::*CreateNewHashEntryCart)(int X, int Y, int Theta, int CartAngle);
+    virtual void InitializeEnvironment();
 
     virtual void PrintHashTableHist(FILE* fOut);
 };

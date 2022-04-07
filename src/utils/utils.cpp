@@ -30,6 +30,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <sstream>
+#include <iostream>
 
 #include <sbpl/planners/planner.h>
 #include <sbpl/utils/utils.h>
@@ -384,6 +385,7 @@ double DiscTheta2Cont(int nTheta, int NUMOFANGLEVALS)
 int ContTheta2Disc(double fTheta, int NUMOFANGLEVALS)
 {
     double thetaBinSize = 2.0 * PI_CONST / NUMOFANGLEVALS;
+    // std::cout<<normalizeAngle(fTheta + thetaBinSize / 2.0) << "  "<< normalizeAngle(fTheta + thetaBinSize / 2.0) / (2.0 * PI_CONST) * (NUMOFANGLEVALS)<<std::endl;
     return (int)(normalizeAngle(fTheta + thetaBinSize / 2.0) / (2.0 * PI_CONST) * (NUMOFANGLEVALS));
 }
 
@@ -766,6 +768,7 @@ void get_2d_motion_cells(vector<sbpl_2Dpt_t> polygon, vector<sbpl_xy_theta_pt_t>
     for (set<sbpl_2Dcell_t>::iterator it = cell_set.begin(); it != cell_set.end(); it++) {
         if (first_cell_set.find(*it) == first_cell_set.end()) {
             cells->push_back(*it);
+            // SBPL_PRINTF("The footprint set %f, %f\n", it->x,it->y);
         }
     }
 }
@@ -832,6 +835,7 @@ void get_2d_footprint_cells(vector<sbpl_2Dpt_t> polygon, set<sbpl_2Dcell_t>* cel
     //make a grid big enough for the footprint
     int sizex = (maxx - minx + 1) + 2;
     int sizey = (maxy - miny + 1) + 2;
+    std::cout<<"size x and y are "<<sizex<<", "<<sizey<<std::endl;
     int** grid = new int*[sizex];
     for (int i = 0; i < sizex; i++) {
         grid[i] = new int[sizey];

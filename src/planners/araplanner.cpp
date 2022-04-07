@@ -270,6 +270,7 @@ void ARAPlanner::UpdatePreds(ARAState* state, ARASearchStateSpace_t* pSearchStat
             predstate->g = state->v + CostV[pind];
             predstate->bestnextstate = state->MDPstate;
             predstate->costtobestnextstate = CostV[pind];
+            SBPL_INFO("Pred State ID: %d, Current State ID: %d", predstate->MDPstate->StateID, state->MDPstate->StateID);
 
             //re-insert into heap if not closed yet
             if (predstate->iterationclosed != pSearchStateSpace->searchiteration) {
@@ -302,6 +303,7 @@ void ARAPlanner::UpdateSuccs(ARAState* state, ARASearchStateSpace_t* pSearchStat
     for (int sind = 0; sind < (int)SuccIDV.size(); sind++) {
         CMDPSTATE* SuccMDPState = GetState(SuccIDV[sind], pSearchStateSpace);
         int cost = CostV[sind];
+        // SBPL_INFO("DEBUG: cost %d, %d", cost, CostV[sind]);
 
         succstate = (ARAState*)(SuccMDPState->PlannerSpecificData);
         if (succstate->callnumberaccessed != pSearchStateSpace->callnumber) {
@@ -313,6 +315,7 @@ void ARAPlanner::UpdateSuccs(ARAState* state, ARASearchStateSpace_t* pSearchStat
         if (succstate->g > state->v + cost) {
             succstate->g = state->v + cost;
             succstate->bestpredstate = state->MDPstate;
+            // SBPL_INFO("Succ State ID: %d, Current State ID: %d", succstate->MDPstate->StateID, state->MDPstate->StateID);
 
             //re-insert into heap if not closed yet
             if (succstate->iterationclosed != pSearchStateSpace->searchiteration) {
@@ -377,6 +380,12 @@ int ARAPlanner::ImprovePath(ARASearchStateSpace_t* pSearchStateSpace, double Max
         //get the state
         state = (ARAState*)pSearchStateSpace->heap->deleteminheap();
 
+        // SBPL_INFO("expanding state(%d): h=%d g=%u key=%u v=%u iterc=%d callnuma=%d expands=%d (g(goal)=%u)\n",
+        //              state->MDPstate->StateID, state->h, state->g, state->g+(int)(pSearchStateSpace->eps*state->h),
+        //              state->v, state->iterationclosed, state->callnumberaccessed, state->numofexpands,
+        //              searchgoalstate->g);
+        // SBPL_INFO("expanding: ");
+
 #if DEBUG
         SBPL_FPRINTF(fDeb, "expanding state(%d): h=%d g=%u key=%u v=%u iterc=%d callnuma=%d expands=%d (g(goal)=%u)\n",
                      state->MDPstate->StateID, state->h, state->g, state->g+(int)(pSearchStateSpace->eps*state->h),
@@ -420,6 +429,7 @@ int ARAPlanner::ImprovePath(ARASearchStateSpace_t* pSearchStateSpace, double Max
             UpdatePreds(state, pSearchStateSpace);
         else
             UpdateSuccs(state, pSearchStateSpace);
+
 
         //recompute minkey
         minkey = pSearchStateSpace->heap->getminkeyheap();
@@ -704,6 +714,7 @@ int ARAPlanner::ReconstructPath(ARASearchStateSpace_t* pSearchStateSpace)
 
             //get the parent state
             PredMDPstate = stateinfo->bestpredstate;
+            SBPL_INFO("Pred State ID: %d", PredMDPstate->StateID);
             predstateinfo = (ARAState*)PredMDPstate->PlannerSpecificData;
 
             //set its best next info
@@ -856,11 +867,15 @@ vector<int> ARAPlanner::GetSearchPath(ARASearchStateSpace_t* pSearchStateSpace, 
 
         environment_->GetSuccs(state->StateID, &SuccIDV, &CostV);
         int actioncost = INFINITECOST;
+
         for (int i = 0; i < (int)SuccIDV.size(); i++) {
+            SBPL_INFO("The cost of each action: %d. ID comparison: succIDV %d, bestnextstate; %d\n", CostV.at(i), SuccIDV.at(i), searchstateinfo->bestnextstate->StateID);
+
             if (SuccIDV.at(i) == searchstateinfo->bestnextstate->StateID && CostV.at(i) < actioncost) {
                 actioncost = CostV.at(i);
             }
         }
+        // TODO Yucheng 22.03 actioncost not loaded
         if (actioncost == INFINITECOST) SBPL_PRINTF("WARNING: actioncost = %d\n", actioncost);
 
         solcost += actioncost;
@@ -932,6 +947,7 @@ bool ARAPlanner::Search(ARASearchStateSpace_t* pSearchStateSpace, vector<int>& p
     stats.clear();
     int prevexpands = 0;
     clock_t loop_time;
+
     while (pSearchStateSpace->eps_satisfied > final_epsilon &&
            (clock() - TimeStarted) < MaxNumofSecs * (double)CLOCKS_PER_SEC &&
                (pSearchStateSpace->eps_satisfied == INFINITECOST ||
@@ -962,9 +978,10 @@ bool ARAPlanner::Search(ARASearchStateSpace_t* pSearchStateSpace, vector<int>& p
             Reevaluatefvals(pSearchStateSpace);
 
         //improve or compute path
+        // SBPL_PRINTF("ImprovePath succeeded? %d", ImprovePath(pSearchStateSpace, MaxNumofSecs));
         if (ImprovePath(pSearchStateSpace, MaxNumofSecs) == 1) {
             pSearchStateSpace->eps_satisfied = pSearchStateSpace->eps;
-        }
+        } 
 
         //print the solution cost and eps bound
         SBPL_PRINTF("eps=%f expands=%d g(searchgoal)=%d time=%.3f\n", pSearchStateSpace->eps_satisfied,
@@ -1023,6 +1040,7 @@ bool ARAPlanner::Search(ARASearchStateSpace_t* pSearchStateSpace, vector<int>& p
     else {
         SBPL_PRINTF("solution is found\n");
         pathIds = GetSearchPath(pSearchStateSpace, solcost);
+        SBPL_PRINTF("solution is found\n");
         ret = true;
     }
 
