@@ -652,6 +652,8 @@ public:
     // virtual const EnvNAVXYTHETALATConfig_t* GetEnvNavConfig();
     virtual const EnvNAVXYTHETALATConfig_Cart_t* GetEnvNavConfig();
 
+    // virtual void ComputeReplanningDataforAction(EnvNAVXYTHETALATCARTAction_t* action);
+
     virtual ~EnvironmentNAVXYTHETALATTICE();
 
     /**
@@ -788,6 +790,11 @@ protected:
 
     virtual void ComputeReplanningDataCart();
     virtual void ComputeReplanningDataforAction(EnvNAVXYTHETALATCARTAction_t* action);
+
+    // Multithreads test
+    virtual void ComputeReplanningDataforActionTest(EnvNAVXYTHETALATCARTAction_t* action);
+
+    virtual void ComputerReplanningDataforSepAct(int tind, EnvNAVXYTHETALATCARTAction_t*** action);
 
     virtual void InitializeEnvironmentCart() = 0;
 

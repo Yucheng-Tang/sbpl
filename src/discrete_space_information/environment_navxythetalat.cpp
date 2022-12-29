@@ -36,6 +36,9 @@
 #include <sbpl/utils/mdp.h>
 #include <sbpl/utils/mdpconfig.h>
 
+#include<thread>
+#include <mutex>
+
 #if TIME_DEBUG
 static clock_t time3_addallout = 0;
 static clock_t time_gethash = 0;
@@ -43,6 +46,7 @@ static clock_t time_createhash = 0;
 static clock_t time_getsuccs = 0;
 #endif
 
+std::mutex mtx;
 static long int checks = 0;
 
 #define XYTHETA2INDEX(X,Y,THETA) (THETA + X*EnvNAVXYTHETALATCfg.NumThetaDirs + \
@@ -1007,6 +1011,7 @@ bool EnvironmentNAVXYTHETALATTICE::ReadMotionPrimitivesCart(FILE* fMotPrims)
         EnvNAVXYTHETALATCartCfg.mprimV.push_back(motprim);
 
     }
+    // SBPL_INFO("Size of mprimV: %d\n", EnvNAVXYTHETALATCartCfg.mprimV.size());
     SBPL_PRINTF("done");
     SBPL_FFLUSH(stdout);
     return true;
@@ -1094,7 +1099,9 @@ void EnvironmentNAVXYTHETALATTICE::ComputeReplanningDataforAction(
         }
     }
     if (j == (int)affectedsuccstatesVc.size()) {
+        mtx.lock();
         affectedsuccstatesVc.push_back(endcell3d);
+        mtx.unlock();
     }
 
     for (j = 0; j < (int)affectedpredstatesVc.size(); j++) {
@@ -1103,7 +1110,9 @@ void EnvironmentNAVXYTHETALATTICE::ComputeReplanningDataforAction(
         }
     }
     if (j == (int)affectedpredstatesVc.size()) {
+        mtx.lock();
         affectedpredstatesVc.push_back(startcell3d);
+        mtx.unlock();
     }
 
     //---intersecting cell = outcome state
@@ -1134,7 +1143,9 @@ void EnvironmentNAVXYTHETALATTICE::ComputeReplanningDataforAction(
         }
     }
     if (j == (int)affectedsuccstatesVc.size()) {
+        mtx.lock();
         affectedsuccstatesVc.push_back(endcell3d);
+        mtx.unlock();
     }
 
     for (j = 0; j < (int)affectedpredstatesVc.size(); j++) {
@@ -1143,31 +1154,253 @@ void EnvironmentNAVXYTHETALATTICE::ComputeReplanningDataforAction(
         }
     }
     if (j == (int)affectedpredstatesVc.size()) {
+        mtx.lock();
         affectedpredstatesVc.push_back(startcell3d);
+        mtx.unlock();
     }
 }
+
+void EnvironmentNAVXYTHETALATTICE::ComputeReplanningDataforActionTest(EnvNAVXYTHETALATCARTAction_t* action) {
+    int j;
+
+    EnvNAVXYTHETALATCART3Dcell_t startcell3d, endcell3d;
+    std::vector<EnvNAVXYTHETALATCART3Dcell_t> TestaffectedsuccstatesVc; //arrays of states whose outgoing actions cross cell 0,0
+    for (int i = 0; i < (int)action->intersectingcellsV.size(); i++) {
+        startcell3d.theta = action->starttheta;
+        startcell3d.cartangle = action->startcartangle;
+        startcell3d.x = -action->intersectingcellsV.at(i).x;
+        startcell3d.y = -action->intersectingcellsV.at(i).y;
+        // SBPL_INFO("action: x,y (%d, %d), theta (%d, %d), cartangle (%d, %d)", action->dX, action->dY,
+        //          action->starttheta, action->endtheta, action->startcartangle, action->endcartangle);
+        // SBPL_INFO("startcell: (%d, %d, %d, %d)", startcell3d.x, startcell3d.y,
+        //          startcell3d.theta, startcell3d.cartangle);
+
+        if (bUseNonUniformAngles) {
+            endcell3d.theta = normalizeDiscAngle(action->endtheta);
+        }
+        else {
+            endcell3d.theta = NORMALIZEDISCTHETA(action->endtheta, EnvNAVXYTHETALATCartCfg.NumThetaDirs);
+        }
+        endcell3d.x = startcell3d.x + action->dX;
+        endcell3d.y = startcell3d.y + action->dY;
+        endcell3d.cartangle = action->endcartangle;
+
+        //store the cells if not already there
+        for (j = 0; j < (int)affectedsuccstatesVc.size(); j++) {
+            if (affectedsuccstatesVc.at(j) == endcell3d) {
+                break;
+            }
+        }
+        mtx.lock();
+        if (j == (int)affectedsuccstatesVc.size()) {
+            affectedsuccstatesVc.push_back(endcell3d);
+        }
+        mtx.unlock();
+
+        for (j = 0; j < (int)affectedpredstatesVc.size(); j++) {
+            if (affectedpredstatesVc.at(j) == startcell3d) {
+                break;
+            }
+        }
+        mtx.lock();
+        if (j == (int)affectedpredstatesVc.size()) {
+            affectedpredstatesVc.push_back(startcell3d);
+        }
+        mtx.unlock();
+    }
+    // SBPL_INFO("%d J: %d\n",(int)affectedsuccstatesVc.size(), j);
+
+    startcell3d.theta = action->starttheta;
+    startcell3d.x = -0;
+    startcell3d.y = -0;
+    // startcell3d.cartangle = CartContTheta2Disc(0.0, CART_THETADIRS);
+    startcell3d.cartangle = action->startcartangle;
+
+    // compute the translated affected search Pose - what state has an incoming
+    // action whose intersecting cell is at 0,0
+    if (bUseNonUniformAngles) {
+        endcell3d.theta = normalizeDiscAngle(action->endtheta);
+    }
+    else {
+        endcell3d.theta = NORMALIZEDISCTHETA(action->endtheta, EnvNAVXYTHETALATCartCfg.NumThetaDirs);
+    }
+    endcell3d.x = startcell3d.x + action->dX;
+    endcell3d.y = startcell3d.y + action->dY;
+    // endcell3d.cartangle = CartContTheta2Disc(0.0, CART_THETADIRS);
+    endcell3d.cartangle =NORMALIZEDISCTHETA(action->endcartangle, CART_THETADIRS);
+
+
+    //store the cells if not already there
+    for (j = 0; j < (int)affectedsuccstatesVc.size(); j++) {
+        if (affectedsuccstatesVc.at(j) == endcell3d) {
+            break;
+        }
+    }
+    if (j == (int)affectedsuccstatesVc.size()) {
+        mtx.lock();
+        affectedsuccstatesVc.push_back(endcell3d);
+        mtx.unlock();
+    }
+
+    for (j = 0; j < (int)affectedpredstatesVc.size(); j++) {
+        if (affectedpredstatesVc.at(j) == startcell3d) {
+            break;
+        }
+    }
+    if (j == (int)affectedpredstatesVc.size()) {
+        mtx.lock();
+        affectedpredstatesVc.push_back(startcell3d);
+        mtx.unlock();
+    }
+
+    //---intersecting cell = outcome state
+    // compute the translated affected search Pose - what state has an outgoing
+    // action whose intersecting cell is at 0,0
+    startcell3d.theta = action->starttheta;
+    startcell3d.x = -action->dX;
+    startcell3d.y = -action->dY;
+    // 22.03 added
+    startcell3d.cartangle = action->startcartangle;
+
+    // compute the translated affected search Pose - what state has an incoming
+    // action whose intersecting cell is at 0,0
+    if (bUseNonUniformAngles) {
+        endcell3d.theta = normalizeDiscAngle(action->endtheta);
+    }
+    else {
+        endcell3d.theta = NORMALIZEDISCTHETA(action->endtheta, EnvNAVXYTHETALATCartCfg.NumThetaDirs);
+    }
+    endcell3d.x = startcell3d.x + action->dX;
+    endcell3d.y = startcell3d.y + action->dY;
+    // added
+    endcell3d.cartangle =NORMALIZEDISCTHETA(action->endcartangle, CART_THETADIRS);
+
+    for (j = 0; j < (int)affectedsuccstatesVc.size(); j++) {
+        if (affectedsuccstatesVc.at(j) == endcell3d) {
+            break;
+        }
+    }
+    if (j == (int)affectedsuccstatesVc.size()) {
+        mtx.lock();
+        affectedsuccstatesVc.push_back(endcell3d);
+        mtx.unlock();
+    }
+
+    for (j = 0; j < (int)affectedpredstatesVc.size(); j++) {
+        if (affectedpredstatesVc.at(j) == startcell3d) {
+            break;
+        }
+    }
+    if (j == (int)affectedpredstatesVc.size()) {
+        mtx.lock();
+        affectedpredstatesVc.push_back(startcell3d);
+        mtx.unlock();
+    }
+};
+
+void EnvironmentNAVXYTHETALATTICE::ComputerReplanningDataforSepAct(int tind,
+                                                                   EnvNAVXYTHETALATCARTAction_t*** action) {
+    // mtx.lock();
+    // cartangles
+    for (int cind = 0; cind < CART_THETADIRS; cind++) {
+        // actions
+        for (int aind = 0; aind < EnvNAVXYTHETALATCartCfg.actionwidth; aind++) {
+            SBPL_INFO("compute replanning Data for actions! tind %d, cind %d, aind %d\n", tind, cind, aind);
+            // SBPL_INFO("Address of Action in the loop: %x\n", &action);
+            // ComputeReplanningDataforAction(&action[tind][cind][aind]);
+            ComputeReplanningDataforActionTest(&action[tind][cind][aind]);
+        }
+    }
+    // mtx.unlock();
+};
 
 void EnvironmentNAVXYTHETALATTICE::ComputeReplanningDataCart()
 {
     // iterate over all actions
-    // orientations
-    for (int tind = 0; tind < EnvNAVXYTHETALATCartCfg.NumThetaDirs; tind++) {
-        // cartangles
-        for (int cind = 0; cind < CART_THETADIRS; cind++) {
-            // actions
-            for (int aind = 0; aind < EnvNAVXYTHETALATCartCfg.actionwidth; aind++) {
-                // compute replanning data for this action
-                SBPL_INFO("compute replanning Data for actions! tind %d, cind %d, aind %d\n", tind,cind, aind);
-                ComputeReplanningDataforAction(&EnvNAVXYTHETALATCartCfg.ActionsV[tind][cind][aind]);
+    // for (int tind = 0; tind < EnvNAVXYTHETALATCartCfg.NumThetaDirs; tind++) {
+        // num of Threads
+        int maxThreads = std::thread::hardware_concurrency();
+        // int maxThreads = 10;
+        SBPL_INFO("Num of Threads: %d, Num of necessary Threads: %d", maxThreads, EnvNAVXYTHETALATCartCfg.NumThetaDirs);
+        if (maxThreads > EnvNAVXYTHETALATCartCfg.NumThetaDirs) {
+            std::thread threads[EnvNAVXYTHETALATCartCfg.NumThetaDirs];
+            for (int i = 0; i < EnvNAVXYTHETALATCartCfg.NumThetaDirs; i++)
+            {
+                SBPL_INFO("Thread: %d\n", i);
+                // SBPL_INFO("Address of Action: %x\n", &EnvNAVXYTHETALATCartCfg.ActionsV);
+                threads[i] = std::thread(&EnvironmentNAVXYTHETALATTICE::ComputerReplanningDataforSepAct, this,
+                                         i, EnvNAVXYTHETALATCartCfg.ActionsV);
+                // threads[i].detach();
+                // threads[i].join();
+            }
+            SBPL_INFO("Down spawning threads, wait for them to join now!");
+            for (auto& t: threads)
+                t.join();
+        }
+        else {
+            SBPL_INFO("Num of Threads is smaller than action angles, single thread processing! ");
+            for (int tind = 0; tind < EnvNAVXYTHETALATCartCfg.NumThetaDirs; tind++) {
+                // cartangles
+                for (int cind = 0; cind < CART_THETADIRS; cind++) {
+                    // actions
+                    for (int aind = 0; aind < EnvNAVXYTHETALATCartCfg.actionwidth; aind++) {
+                        // compute replanning data for this action
+                        SBPL_INFO("compute replanning Data for actions! tind %d, cind %d, aind %d\n", tind, cind, aind);
+                        ComputeReplanningDataforActionTest(&EnvNAVXYTHETALATCartCfg.ActionsV[tind][cind][aind]);
+                    }
+                }
             }
         }
-    }
+    // }
+
+
+    // orientations
+//    for (int tind = 0; tind < EnvNAVXYTHETALATCartCfg.NumThetaDirs; tind++) {
+//        // cartangles
+//        for (int cind = 0; cind < CART_THETADIRS; cind++) {
+//            // num of Threads
+//            int maxThreads = std::thread::hardware_concurrency();
+//            // int maxThreads = 10;
+//            SBPL_INFO("Num of Threads: %d, Num of necessary Threads: %d", maxThreads, EnvNAVXYTHETALATCartCfg.actionwidth);
+//            // newFixedThreadPool
+//            // ExecutorService pool = Executor.newFixedThreadPool(10)
+//            // std::vector<std::thread> threads(16);
+//            if (maxThreads > EnvNAVXYTHETALATCartCfg.actionwidth) {
+//                std::thread threads[EnvNAVXYTHETALATCartCfg.actionwidth];
+//                for (int i = 0; i < EnvNAVXYTHETALATCartCfg.actionwidth; i++)
+//                {
+//                    SBPL_INFO("compute replanning Data for actions! tind %d, cind %d, aind %d\n", tind,cind, i);
+//                    threads[i] = std::thread(&EnvironmentNAVXYTHETALATTICE::ComputeReplanningDataforAction, this,
+//                            &EnvNAVXYTHETALATCartCfg.ActionsV[tind][cind][i]);
+//                }
+//                SBPL_INFO("Down spawning threads, wait for them to join now!");
+//                for (auto& t: threads)
+//                    t.join();
+//                // std::vector<std::thread> threads(EnvNAVXYTHETALATCartCfg.actionwidth);
+//                // for (auto it = std::begin(threads); it != std::end(threads) - 1; ++it) {
+//                //     *it = std::thread(&EnvironmentNAVXYTHETALATTICE::ComputeReplanningDataforAction, this,
+//                //                       &EnvNAVXYTHETALATCartCfg.ActionsV[tind][cind][1]);
+//                // }
+//            }
+//            else {
+//                SBPL_INFO("Num of Threads is smaller than action angles, single thread processing! ");
+//                // actions
+//                for (int aind = 0; aind < EnvNAVXYTHETALATCartCfg.actionwidth; aind++) {
+//                    // compute replanning data for this action
+//                    SBPL_INFO("compute replanning Data for actions! tind %d, cind %d, aind %d\n", tind,cind, aind);
+//                    ComputeReplanningDataforAction(&EnvNAVXYTHETALATCartCfg.ActionsV[tind][cind][aind]);
+//                }
+//            }
+//        }
+//    }
 }
 
 // for trailer
 void EnvironmentNAVXYTHETALATTICE::PrecomputeActionswithCompleteMotionPrimitive(
     std::vector<SBPL_xythetacart_mprimitive>* motionprimitiveV)
 {
+    SBPL_INFO("Size of mprimV: %d\n", motionprimitiveV->size());
+
     SBPL_PRINTF("Pre-computing action data using motion primitives for every angle...\n");
     // EnvNAVXYTHETALATCartCfg.ActionsV = new EnvNAVXYTHETALATCARTAction_t*[EnvNAVXYTHETALATCartCfg.NumThetaDirs];
     
@@ -1176,6 +1409,8 @@ void EnvironmentNAVXYTHETALATTICE::PrecomputeActionswithCompleteMotionPrimitive(
     EnvNAVXYTHETALATCartCfg.PredActionsV = new std::vector<EnvNAVXYTHETALATCARTAction_t*>[EnvNAVXYTHETALATCartCfg.NumThetaDirs];
     std::vector<sbpl_2Dcell_t> footprint;
 
+    SBPL_INFO("motionprimitiveV %d, %d \n", motionprimitiveV->size(),
+              motionprimitiveV->size() / EnvNAVXYTHETALATCartCfg.NumThetaDirs);
     if (motionprimitiveV->size() % EnvNAVXYTHETALATCartCfg.NumThetaDirs != 0) {
         throw SBPL_Exception("ERROR: motionprimitives should be uniform across actions");
     }
@@ -1824,6 +2059,8 @@ void EnvironmentNAVXYTHETALATTICE::InitializeEnvConfig(std::vector<SBPL_xythetac
                      DISCXY2CONT(footprint.at(i).y, EnvNAVXYTHETALATCartCfg.cellsize_m));
     }
 #endif
+
+    SBPL_INFO("Size of mprimV: %d\n", motionprimitiveV->size());
 
     if (motionprimitiveV == NULL) {
         SBPL_INFO("!!!!!!!!!!!!Deprecated Precompute Actions!!!!!!!!!!!!!!!!");
