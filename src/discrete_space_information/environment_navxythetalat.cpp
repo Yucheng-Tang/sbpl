@@ -1305,7 +1305,8 @@ void EnvironmentNAVXYTHETALATTICE::ComputerReplanningDataforSepAct(int tind,
     for (int cind = 0; cind < CART_THETADIRS; cind++) {
         // actions
         for (int aind = 0; aind < EnvNAVXYTHETALATCartCfg.actionwidth; aind++) {
-            SBPL_INFO("compute replanning Data for actions! tind %d, cind %d, aind %d\n", tind, cind, aind);
+            // Important debug output!
+            // SBPL_INFO("compute replanning Data for actions! tind %d, cind %d, aind %d\n", tind, cind, aind);
             // SBPL_INFO("Address of Action in the loop: %x\n", &action);
             // ComputeReplanningDataforAction(&action[tind][cind][aind]);
             ComputeReplanningDataforActionTest(&action[tind][cind][aind]);
@@ -1507,7 +1508,8 @@ void EnvironmentNAVXYTHETALATTICE::PrecomputeActionswithCompleteMotionPrimitive(
                 previnterm3Dcell.y = 0;
                 previnterm3Dcell.theta = 0; 
                 previnterm3Dcell.cartangle = CartContTheta2Disc(0, CART_THETADIRS); // 2 for 5 number of jointangles
-                SBPL_DEBUG("Motion primitive has %d intermediate points for (%d,%d)",(int)motionprimitiveV->at(mind).intermptV.size(),tind,aind);
+                // Important debug output
+                // SBPL_DEBUG("Motion primitive has %d intermediate points for (%d,%d)",(int)motionprimitiveV->at(mind).intermptV.size(),tind,aind);
                 // SBPL_DEBUG("Cartangle is %d", previnterm3Dcell.cartangle);
 
 
@@ -1910,7 +1912,7 @@ void EnvironmentNAVXYTHETALATTICE::Get2dMotionCells(std::vector<sbpl_2Dpt_t> pol
 
     //get first footprint set
     std::set<sbpl_2Dcell_t> first_cell_set;
-    SBPL_PRINTF("Get first footprint set");
+    // SBPL_PRINTF("Get first footprint set");
     CalculateFootprintForPose(polygon, polygon_cart, &first_cell_set, poses[0], res);
     // SBPL_PRINTF("The size of the first footprint set %d\n", first_cell_set.size());
 
