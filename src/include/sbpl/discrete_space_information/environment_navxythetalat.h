@@ -65,7 +65,8 @@
 #define ENVNAVXYTHETALATCART_DEFAULTOBSTHRESH 254
 #define NAVXYTHETALATCART_DEFAULT_ACTIONWIDTH 14 // 5
 #define NAVXYTHETALATCART_THETADIRS 16
-#define CART_THETADIRS 5 // changed 
+#define CART_THETADIRS 1 // changed for evaluation week (simplified mp)
+// #define CART_THETADIRS 5 // changed
 #define MAX_CART_ANGLE M_PI/4.0 // M_PI/4.0
 
 class CMDPSTATE;

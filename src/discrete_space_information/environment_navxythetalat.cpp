@@ -600,39 +600,82 @@ int EnvironmentNAVXYTHETALATTICE::ContTheta2DiscNew(double theta) const
 }
 
 // trailer angle conversion
+// modified for evaluation week (simplified mp)
 double CartDiscTheta2Cont(int nTheta, int NUMOFANGLEVALS)
 {
-  double thetaBinSize = (2*MAX_CART_ANGLE)/(CART_THETADIRS-1);
-  return -MAX_CART_ANGLE+nTheta*thetaBinSize;
+//   double thetaBinSize = (2*MAX_CART_ANGLE)/(CART_THETADIRS-1);
+    double thetaBinSize = (2*MAX_CART_ANGLE)/4;
+//   return -MAX_CART_ANGLE + nTheta*thetaBinSize;
+    return nTheta*thetaBinSize;
 //   double thetaBinSize = (2*180/(double)NUMOFANGLEVALS);
 //   // SBPL_INFO("What is it? %d, %f, %d",nTheta, thetaBinSize, NUMOFANGLEVALS);
 //   double result = (double)nTheta*thetaBinSize;
 //   // SBPL_INFO("What is it? %f", result);
 
 //   return result;
+
 }
 
 //converts continuous (radians) version of angle into discrete
+
 //maps 0->0, [delta/2, 3/2*delta)->1, [3/2*delta, 5/2*delta)->2,...
 int CartContTheta2Disc(double fTheta, int NUMOFANGLEVALS)
 {
     // for 360° version
     // SBPL_INFO("cont phi to discrete value %f, %d", (fTheta+(2*M_PI/NUMOFANGLEVALS)/2)/(2*M_PI/NUMOFANGLEVALS), floor((fTheta+(2*M_PI/NUMOFANGLEVALS)/2)/(2*M_PI/NUMOFANGLEVALS)));
     // return floor((fTheta+(2*M_PI/NUMOFANGLEVALS)/2)/(2*M_PI/NUMOFANGLEVALS));
-  
-  // for +-45° version
-  if(fTheta < -MAX_CART_ANGLE)
-    return 0;
-  else if (fTheta > MAX_CART_ANGLE)
-    return (CART_THETADIRS-1);
-  else
-  {
-    double thetaBinSize = (2*MAX_CART_ANGLE)/(CART_THETADIRS-1);
-    // SBPL_INFO("cont phi to discrete value %f, %d",fTheta, (int)((fTheta+MAX_CART_ANGLE+thetaBinSize/2.0)/thetaBinSize));
-    
-    return (int)((fTheta+MAX_CART_ANGLE+thetaBinSize/2.0)/thetaBinSize);
-  }
+//   return 0;
+    // for +-45° version
+    if(abs(fTheta) < M_PI/16.0)
+        return 0;
+//   if(fTheta < -MAX_CART_ANGLE)
+//     return 0;
+//   else if (fTheta > MAX_CART_ANGLE)
+//     return (CART_THETADIRS-1);
+//   else
+//   {
+//     // double thetaBinSize = (2*MAX_CART_ANGLE)/(CART_THETADIRS-1);
+//     double thetaBinSize = (2*MAX_CART_ANGLE)/4;
+//     // SBPL_INFO("cont phi to discrete value %f, %d",fTheta, (int)((fTheta+MAX_CART_ANGLE+thetaBinSize/2.0)/thetaBinSize));
+
+//     return (int)((fTheta+MAX_CART_ANGLE+thetaBinSize/2.0)/thetaBinSize);
+//   }
 }
+
+// trailer angle conversion
+//double CartDiscTheta2Cont(int nTheta, int NUMOFANGLEVALS)
+//{
+//  double thetaBinSize = (2*MAX_CART_ANGLE)/(CART_THETADIRS-1);
+//  return -MAX_CART_ANGLE+nTheta*thetaBinSize;
+////   double thetaBinSize = (2*180/(double)NUMOFANGLEVALS);
+////   // SBPL_INFO("What is it? %d, %f, %d",nTheta, thetaBinSize, NUMOFANGLEVALS);
+////   double result = (double)nTheta*thetaBinSize;
+////   // SBPL_INFO("What is it? %f", result);
+//
+////   return result;
+//}
+//
+////converts continuous (radians) version of angle into discrete
+////maps 0->0, [delta/2, 3/2*delta)->1, [3/2*delta, 5/2*delta)->2,...
+//int CartContTheta2Disc(double fTheta, int NUMOFANGLEVALS)
+//{
+//    // for 360° version
+//    // SBPL_INFO("cont phi to discrete value %f, %d", (fTheta+(2*M_PI/NUMOFANGLEVALS)/2)/(2*M_PI/NUMOFANGLEVALS), floor((fTheta+(2*M_PI/NUMOFANGLEVALS)/2)/(2*M_PI/NUMOFANGLEVALS)));
+//    // return floor((fTheta+(2*M_PI/NUMOFANGLEVALS)/2)/(2*M_PI/NUMOFANGLEVALS));
+//
+//  // for +-45° version
+//  if(fTheta < -MAX_CART_ANGLE)
+//    return 0;
+//  else if (fTheta > MAX_CART_ANGLE)
+//    return (CART_THETADIRS-1);
+//  else
+//  {
+//    double thetaBinSize = (2*MAX_CART_ANGLE)/(CART_THETADIRS-1);
+//    // SBPL_INFO("cont phi to discrete value %f, %d",fTheta, (int)((fTheta+MAX_CART_ANGLE+thetaBinSize/2.0)/thetaBinSize));
+//
+//    return (int)((fTheta+MAX_CART_ANGLE+thetaBinSize/2.0)/thetaBinSize);
+//  }
+//}
 
 double EnvironmentNAVXYTHETALATTICE::DiscTheta2ContFromSet(int theta) const
 {
@@ -1338,18 +1381,31 @@ void EnvironmentNAVXYTHETALATTICE::ComputeReplanningDataCart()
                 t.join();
         }
         else {
-            SBPL_INFO("Num of Threads is smaller than action angles, single thread processing! ");
-            for (int tind = 0; tind < EnvNAVXYTHETALATCartCfg.NumThetaDirs; tind++) {
-                // cartangles
-                for (int cind = 0; cind < CART_THETADIRS; cind++) {
-                    // actions
-                    for (int aind = 0; aind < EnvNAVXYTHETALATCartCfg.actionwidth; aind++) {
-                        // compute replanning data for this action
-                        SBPL_INFO("compute replanning Data for actions! tind %d, cind %d, aind %d\n", tind, cind, aind);
-                        ComputeReplanningDataforActionTest(&EnvNAVXYTHETALATCartCfg.ActionsV[tind][cind][aind]);
-                    }
+            std::thread threads[16];
+            for (int j = 0; j < 2; j++){
+                for (int i = 0; i < 16; i++){
+                    SBPL_INFO("Thread: %d\n", i);
+                    threads[i] = std::thread(&EnvironmentNAVXYTHETALATTICE::ComputerReplanningDataforSepAct, this,
+                                          j*16+i, EnvNAVXYTHETALATCartCfg.ActionsV);
                 }
+                SBPL_INFO("Down spawning threads, wait for them to join now!");
+                for (auto& t: threads)
+                    t.join();
             }
+
+
+//            SBPL_INFO("Num of Threads is smaller than action angles, single thread processing! ");
+//            for (int tind = 0; tind < EnvNAVXYTHETALATCartCfg.NumThetaDirs; tind++) {
+//                // cartangles
+//                for (int cind = 0; cind < CART_THETADIRS; cind++) {
+//                    // actions
+//                    for (int aind = 0; aind < EnvNAVXYTHETALATCartCfg.actionwidth; aind++) {
+//                        // compute replanning data for this action
+//                        SBPL_INFO("compute replanning Data for actions! tind %d, cind %d, aind %d\n", tind, cind, aind);
+//                        ComputeReplanningDataforActionTest(&EnvNAVXYTHETALATCartCfg.ActionsV[tind][cind][aind]);
+//                    }
+//                }
+//            }
         }
     // }
 
@@ -2290,7 +2346,7 @@ int EnvironmentNAVXYTHETALATTICE::GetActionCost(
             EnvNAVXYTHETALATCartCfg.Grid2D[SourceX + action->dX][SourceY + action->dY]);
 
     // Debug 04.04
-    // SBPL_INFO("action cost with collision checking. Souce: (%d, %d, %d, %d), Cost: %d", SourceX, SourceY, SourceTheta, SourceCartAngle, action->cost * (currentmaxcost + 1));
+    SBPL_INFO("action cost with collision checking. Souce: (%d, %d, %d, %d), Cost: %d", SourceX, SourceY, SourceTheta, SourceCartAngle, action->cost * (currentmaxcost + 1));
 
     // use cell cost as multiplicative factor
     return action->cost * (currentmaxcost + 1);
